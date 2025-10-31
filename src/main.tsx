@@ -9,7 +9,7 @@ import 'primeicons/primeicons.css';
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <BrowserRouter basename="amortization-table">
+    <BrowserRouter basename="">
       <App />
     </BrowserRouter>
   </React.StrictMode >,
