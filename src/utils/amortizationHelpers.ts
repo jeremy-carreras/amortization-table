@@ -1,62 +1,356 @@
 import type {
   AmortizationRow,
   ExtraPayment,
+  InsuranceConfig,
+  PaymentFrequency,
+  InsuranceBreakdown,
 } from "../pages/AmortizationTable/IAmortizationTable";
 
 export const currencyFormat = (value: number): string =>
   value.toLocaleString("en-US", { style: "currency", currency: "USD" });
 
+/**
+ * Get the number of periods per year based on payment frequency
+ */
+export const getPeriodsPerYear = (frequency: PaymentFrequency): number => {
+  switch (frequency) {
+    case "weekly":
+      return 52;
+    case "biweekly":
+      return 26;
+    case "monthly":
+    default:
+      return 12;
+  }
+};
+
+/**
+ * Get the label for the period based on payment frequency
+ */
+export const getPeriodLabel = (frequency: PaymentFrequency): string => {
+  switch (frequency) {
+    case "weekly":
+      return "Week";
+    case "biweekly":
+      return "Period";
+    case "monthly":
+    default:
+      return "Month";
+  }
+};
+
+/**
+ * Calculate insurance for a given period
+ */
+const calculateInsurance = (
+  balance: number,
+  payment: number,
+  config: InsuranceConfig,
+): InsuranceBreakdown => {
+  const fixed = config.enabled ? config.fixedAmount : 0;
+  const percentageOfBalance = config.enabled
+    ? (balance * config.percentageOfBalance) / 100
+    : 0;
+  const percentageOfPayment = config.enabled
+    ? (payment * config.percentageOfPayment) / 100
+    : 0;
+
+  return {
+    fixed,
+    percentageOfBalance,
+    percentageOfPayment,
+    total: fixed + percentageOfBalance + percentageOfPayment,
+  };
+};
+
+/**
+ * Calculate amortization schedule with flexible payment frequency and insurance types
+ */
 export const calculateAmortization = (
   totalLoan: number,
-  months: number,
+  totalPeriods: number,
   annualRate: number,
+  paymentFrequency: PaymentFrequency,
   payments: ExtraPayment[],
-  insuranceRate: number,
+  insuranceConfig: InsuranceConfig,
   setTable: (table: AmortizationRow[]) => void,
-  setShowTable: (value: boolean) => void
+  setShowTable: (value: boolean) => void,
 ) => {
   let balance = totalLoan;
-  let remainingMonths = months;
+  let remainingPeriods = totalPeriods;
   const rows: AmortizationRow[] = [];
-  let currentMonth = 1;
+  let currentPeriod = 1;
 
-  const monthlyRate = annualRate / 100 / 12;
+  const periodsPerYear = getPeriodsPerYear(paymentFrequency);
+  const periodRate = annualRate / 100 / periodsPerYear;
 
-  while (currentMonth <= months && balance > 0) {
+  while (currentPeriod <= totalPeriods && balance > 0) {
     const payment =
-      (balance * monthlyRate) /
-      (1 - Math.pow(1 + monthlyRate, -remainingMonths));
+      (balance * periodRate) /
+      (1 - Math.pow(1 + periodRate, -remainingPeriods));
 
-    const interest = balance * monthlyRate;
+    const interest = balance * periodRate;
     const principal = payment - interest;
 
+    const insuranceBreakdown = calculateInsurance(
+      balance,
+      payment,
+      insuranceConfig,
+    );
+
     const extraPayment = payments
-      .filter((p) => p.month === currentMonth)
+      .filter((p) => p.period === currentPeriod)
       .reduce((sum, p) => sum + p.amount, 0);
 
     const finalBalance = balance - principal - extraPayment;
-    const insurance = balance * insuranceRate;
-    const totalPayment = payment + insurance;
+    const totalPayment = payment + insuranceBreakdown.total;
 
     rows.push({
-      month: currentMonth,
+      period: currentPeriod,
       initialBalance: balance,
       payment,
+      insurance: insuranceBreakdown.total,
       totalPayment,
       interest,
       principal,
       extraPayment,
       finalBalance: finalBalance < 0 ? 0 : finalBalance,
-      ...(insurance ? { insurance } : {}),
+      insuranceBreakdown,
     });
 
     balance = finalBalance;
-    remainingMonths--;
-    currentMonth++;
+    remainingPeriods--;
+    currentPeriod++;
 
     if (balance <= 0) break;
   }
 
   setTable(rows);
   setShowTable(true);
+};
+
+/**
+ * Export amortization table to CSV
+ */
+export const exportToCSV = (
+  data: AmortizationRow[],
+  periodLabel: string,
+  showInsurance: boolean,
+  showExtraPayments: boolean,
+) => {
+  const headers = [
+    periodLabel,
+    "Initial Balance",
+    "Payment",
+    ...(showInsurance
+      ? ["Fixed Insurance", "% of Balance", "% of Payment", "Total Insurance"]
+      : []),
+    "Total Payment",
+    "Interest",
+    "Principal",
+    ...(showExtraPayments ? ["Extra Payment"] : []),
+    "Final Balance",
+  ];
+
+  const rows = data.map((row) => [
+    row.period,
+    row.initialBalance.toFixed(2),
+    row.payment.toFixed(2),
+    ...(showInsurance && row.insuranceBreakdown
+      ? [
+          (row.insuranceBreakdown.fixed || 0).toFixed(2),
+          (row.insuranceBreakdown.percentageOfBalance || 0).toFixed(2),
+          (row.insuranceBreakdown.percentageOfPayment || 0).toFixed(2),
+          row.insurance.toFixed(2),
+        ]
+      : []),
+    row.totalPayment.toFixed(2),
+    row.interest.toFixed(2),
+    row.principal.toFixed(2),
+    ...(showExtraPayments ? [row.extraPayment.toFixed(2)] : []),
+    row.finalBalance.toFixed(2),
+  ]);
+
+  const csvContent = [
+    headers.join(","),
+    ...rows.map((row) => row.join(",")),
+  ].join("\n");
+
+  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+  const link = document.createElement("a");
+  const url = URL.createObjectURL(blob);
+  link.setAttribute("href", url);
+  link.setAttribute("download", `amortization_${new Date().getTime()}.csv`);
+  link.style.visibility = "hidden";
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+};
+
+/**
+ * Export amortization table to Excel
+ */
+export const exportToExcel = async (
+  data: AmortizationRow[],
+  periodLabel: string,
+  showInsurance: boolean,
+  showExtraPayments: boolean,
+  loanAmount: number,
+  annualRate: number,
+  totalPeriods: number,
+  paymentFrequency: PaymentFrequency,
+) => {
+  // Dynamic import to avoid bundling xlsx unless needed
+  const XLSX = await import("xlsx");
+
+  // Summary sheet
+  const summary = [
+    ["Loan Amortization Summary"],
+    [""],
+    ["Loan Amount", loanAmount],
+    ["Annual Interest Rate", `${annualRate}%`],
+    [`Total ${periodLabel}s`, totalPeriods],
+    ["Payment Frequency", paymentFrequency],
+    [""],
+    ["Total Interest Paid", data.reduce((sum, row) => sum + row.interest, 0)],
+    ["Total Insurance Paid", data.reduce((sum, row) => sum + row.insurance, 0)],
+    [
+      "Total Extra Payments",
+      data.reduce((sum, row) => sum + row.extraPayment, 0),
+    ],
+    [
+      "Total Amount Paid",
+      data.reduce((sum, row) => sum + row.totalPayment + row.extraPayment, 0),
+    ],
+  ];
+
+  // Amortization schedule headers
+  const headers = [
+    periodLabel,
+    "Initial Balance",
+    "Payment",
+    ...(showInsurance
+      ? ["Fixed Insurance", "% of Balance", "% of Payment", "Total Insurance"]
+      : []),
+    "Total Payment",
+    "Interest",
+    "Principal",
+    ...(showExtraPayments ? ["Extra Payment"] : []),
+    "Final Balance",
+  ];
+
+  // Amortization schedule data
+  const scheduleData = data.map((row) => [
+    row.period,
+    row.initialBalance,
+    row.payment,
+    ...(showInsurance && row.insuranceBreakdown
+      ? [
+          row.insuranceBreakdown.fixed || 0,
+          row.insuranceBreakdown.percentageOfBalance || 0,
+          row.insuranceBreakdown.percentageOfPayment || 0,
+          row.insurance,
+        ]
+      : []),
+    row.totalPayment,
+    row.interest,
+    row.principal,
+    ...(showExtraPayments ? [row.extraPayment] : []),
+    row.finalBalance,
+  ]);
+
+  // Create workbook
+  const wb = XLSX.utils.book_new();
+
+  // Add summary sheet
+  const wsSummary = XLSX.utils.aoa_to_sheet(summary);
+  XLSX.utils.book_append_sheet(wb, wsSummary, "Summary");
+
+  // Add schedule sheet
+  const wsSchedule = XLSX.utils.aoa_to_sheet([headers, ...scheduleData]);
+  XLSX.utils.book_append_sheet(wb, wsSchedule, "Amortization Schedule");
+
+  // Write file
+  XLSX.writeFile(wb, `amortization_${new Date().getTime()}.xlsx`);
+};
+
+/**
+ * Generate PDF of amortization table
+ */
+export const exportToPDF = async (
+  data: AmortizationRow[],
+  periodLabel: string,
+  showInsurance: boolean,
+  showExtraPayments: boolean,
+  loanAmount: number,
+  annualRate: number,
+  totalPeriods: number,
+  paymentFrequency: PaymentFrequency,
+) => {
+  // Dynamic import
+  const jsPDF = (await import("jspdf")).default;
+  await import("jspdf-autotable");
+
+  const doc = new jsPDF();
+
+  // Title
+  doc.setFontSize(18);
+  doc.text("Loan Amortization Schedule", 14, 22);
+
+  // Summary
+  doc.setFontSize(11);
+  doc.text(`Loan Amount: ${currencyFormat(loanAmount)}`, 14, 35);
+  doc.text(`Annual Rate: ${annualRate}%`, 14, 42);
+  doc.text(`Total ${periodLabel}s: ${totalPeriods}`, 14, 49);
+  doc.text(`Payment Frequency: ${paymentFrequency}`, 14, 56);
+
+  const totalInterest = data.reduce((sum, row) => sum + row.interest, 0);
+  const totalInsurance = data.reduce((sum, row) => sum + row.insurance, 0);
+  const totalExtra = data.reduce((sum, row) => sum + row.extraPayment, 0);
+  const totalPaid = data.reduce(
+    (sum, row) => sum + row.totalPayment + row.extraPayment,
+    0,
+  );
+
+  doc.text(`Total Interest: ${currencyFormat(totalInterest)}`, 14, 63);
+  doc.text(`Total Insurance: ${currencyFormat(totalInsurance)}`, 14, 70);
+  doc.text(`Total Extra Payments: ${currencyFormat(totalExtra)}`, 14, 77);
+  doc.text(`Total Paid: ${currencyFormat(totalPaid)}`, 14, 84);
+
+  // Table headers
+  const headers = [
+    periodLabel,
+    "Initial Balance",
+    "Payment",
+    ...(showInsurance ? ["Insurance"] : []),
+    "Total Payment",
+    "Interest",
+    "Principal",
+    ...(showExtraPayments ? ["Extra"] : []),
+    "Final Balance",
+  ];
+
+  // Table data
+  const tableData = data.map((row) => [
+    row.period,
+    currencyFormat(row.initialBalance),
+    currencyFormat(row.payment),
+    ...(showInsurance ? [currencyFormat(row.insurance)] : []),
+    currencyFormat(row.totalPayment),
+    currencyFormat(row.interest),
+    currencyFormat(row.principal),
+    ...(showExtraPayments ? [currencyFormat(row.extraPayment)] : []),
+    currencyFormat(row.finalBalance),
+  ]);
+
+  // Add table using autotable
+  (doc as any).autoTable({
+    head: [headers],
+    body: tableData,
+    startY: 95,
+    styles: { fontSize: 8 },
+    headStyles: { fillColor: [66, 139, 202] },
+  });
+
+  doc.save(`amortization_${new Date().getTime()}.pdf`);
 };
