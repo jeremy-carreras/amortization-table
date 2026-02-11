@@ -26,9 +26,9 @@ import {
 
 export const AmortizationTable: React.FC = () => {
   // Loan configuration
-  const [annualRate, setAnnualRate] = useState<number>(10.95);
-  const [totalLoan, setTotalLoan] = useState<number>(3285000);
-  const [totalPeriods, setTotalPeriods] = useState<number>(240);
+  const [annualRate, setAnnualRate] = useState<number>(14.99);
+  const [totalLoan, setTotalLoan] = useState<number>(400000);
+  const [totalPeriods, setTotalPeriods] = useState<number>(24);
   const [paymentFrequency, setPaymentFrequency] =
     useState<PaymentFrequency>("monthly");
 
@@ -160,7 +160,7 @@ export const AmortizationTable: React.FC = () => {
   return (
     <div className="amortization-card">
       {/* Main Configuration Section */}
-      <Panel header="📊 Loan Configuration" toggleable>
+      <Panel header="Loan Configuration" toggleable>
         <div className="section-inputs">
           <div className="input-grid-4">
             <div className="input-group">
@@ -223,7 +223,7 @@ export const AmortizationTable: React.FC = () => {
 
       {/* Insurance Configuration Section */}
       <Panel
-        header="🛡️ Insurance Configuration"
+        header="Insurance Configuration"
         toggleable
         collapsed={!showInsurance}
         className="mt-3"
@@ -260,7 +260,7 @@ export const AmortizationTable: React.FC = () => {
               </div>
 
               <div className="input-group">
-                <label htmlFor="percentageBalance">% of Balance</label>
+                <label htmlFor="percentageBalance">Balance percent</label>
                 <InputNumber
                   id="percentageBalance"
                   value={insurance.percentageOfBalance}
@@ -277,7 +277,7 @@ export const AmortizationTable: React.FC = () => {
               </div>
 
               <div className="input-group">
-                <label htmlFor="percentagePayment">% of Payment</label>
+                <label htmlFor="percentagePayment">Payment percent</label>
                 <InputNumber
                   id="percentagePayment"
                   value={insurance.percentageOfPayment}
@@ -299,7 +299,7 @@ export const AmortizationTable: React.FC = () => {
 
       {/* Extra Payments Section */}
       <Panel
-        header="💰 Extra Payments"
+        header="Extra Payments"
         toggleable
         collapsed={!showExtraPayments}
         className="mt-3"
@@ -316,12 +316,13 @@ export const AmortizationTable: React.FC = () => {
           <>
             <Divider />
             {/* Add new extra payment */}
-            <div className="extra-payment-row">
+            <div className="extra-payment-grid">
               <div className="input-group">
                 <label htmlFor="extraPaymentPeriod">
                   Extra Payment {periodLabel}
                 </label>
                 <InputNumber
+                  size={4}
                   id="extraPaymentPeriod"
                   value={newPaymentPeriod}
                   onValueChange={(e) => setNewPaymentPeriod(e.value ?? 0)}
@@ -349,7 +350,7 @@ export const AmortizationTable: React.FC = () => {
                   icon="pi pi-plus"
                   className="p-button-raised p-button-success"
                   onClick={addPayment}
-                  style={{ padding: '0.5rem 1.5rem' }}
+                  style={{ padding: "0.5rem 1.5rem" }}
                 />
               </div>
             </div>
@@ -449,7 +450,7 @@ export const AmortizationTable: React.FC = () => {
 
           {/* Export Buttons */}
           <div className="export-section">
-            <h3>📤 Export Options</h3>
+            <h3>Export Options</h3>
             <div className="export-buttons">
               <Button
                 label="Export to CSV"
@@ -476,7 +477,7 @@ export const AmortizationTable: React.FC = () => {
 
           {/* Summary Statistics */}
           <div className="summary-section">
-            <h3>📈 Summary</h3>
+            <h3>Summary</h3>
             <div className="summary-grid">
               <div className="summary-card">
                 <span className="summary-label">Total Interest</span>
@@ -523,7 +524,7 @@ export const AmortizationTable: React.FC = () => {
           <Divider />
 
           {/* Amortization Table */}
-          <h2 className="table-title">📊 Amortization Schedule</h2>
+          <h2 className="table-title">Amortization Schedule</h2>
 
           <DataTable
             value={table}
@@ -584,7 +585,7 @@ export const AmortizationTable: React.FC = () => {
           {/* Detailed Insurance Breakdown (Expandable) */}
           {showInsurance && (
             <Accordion className="mt-3">
-              <AccordionTab header="🔍 Detailed Insurance Breakdown">
+              <AccordionTab header="Detailed Insurance Breakdown">
                 <DataTable
                   value={table}
                   responsiveLayout="scroll"
@@ -601,7 +602,7 @@ export const AmortizationTable: React.FC = () => {
                     }
                   />
                   <Column
-                    header="% of Balance"
+                    header="Balance percent"
                     body={(d: AmortizationRow) =>
                       currencyFormat(
                         d.insuranceBreakdown?.percentageOfBalance || 0,
@@ -609,7 +610,7 @@ export const AmortizationTable: React.FC = () => {
                     }
                   />
                   <Column
-                    header="% of Payment"
+                    header="Payment percent"
                     body={(d: AmortizationRow) =>
                       currencyFormat(
                         d.insuranceBreakdown?.percentageOfPayment || 0,

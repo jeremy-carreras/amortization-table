@@ -143,7 +143,7 @@ export const exportToCSV = (
     "Initial Balance",
     "Payment",
     ...(showInsurance
-      ? ["Fixed Insurance", "% of Balance", "% of Payment", "Total Insurance"]
+      ? ["Fixed Insurance", "Balance percent", "Payment percent", "Total Insurance"]
       : []),
     "Total Payment",
     "Interest",
@@ -230,7 +230,7 @@ export const exportToExcel = async (
     "Initial Balance",
     "Payment",
     ...(showInsurance
-      ? ["Fixed Insurance", "% of Balance", "% of Payment", "Total Insurance"]
+      ? ["Fixed Insurance", "Balance percent", "Payment percent", "Total Insurance"]
       : []),
     "Total Payment",
     "Interest",
@@ -293,7 +293,7 @@ export const exportToPDF = async (
   const doc = new jsPDF();
 
   // Title
-  doc.setFontSize(14);
+  doc.setFontSize(12);
   doc.text("Loan Amortization Schedule", 14, 18);
 
   // ---- Totals ----
@@ -321,7 +321,7 @@ export const exportToPDF = async (
     tableWidth: 90,
     body: leftSummary,
     theme: "grid",
-    styles: { fontSize: 9 },
+    styles: { fontSize: 8 },
     columnStyles: {
       0: { fontStyle: "bold", cellWidth: 45 },
       1: { cellWidth: 45 },
@@ -344,7 +344,7 @@ export const exportToPDF = async (
     tableWidth: 90,
     body: rightSummary,
     theme: "grid",
-    styles: { fontSize: 9 },
+    styles: { fontSize: 8 },
     columnStyles: {
       0: { fontStyle: "bold", cellWidth: 45 },
       1: { cellWidth: 45 },

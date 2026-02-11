@@ -10,6 +10,38 @@
     padding: 1rem;
   }
 
+  // Insurance fields grid (ahora flex)
+  .insurance-grid {
+    display: flex; // Movido del JSX
+    gap: 1.5rem;
+    margin-bottom: 1.5rem;
+    flex-wrap: wrap;
+
+    .input-group {
+      display: grid;
+      flex: 1;
+      min-width: 200px;
+      gap: 1rem;
+    }
+  }
+  // Insurance fields grid (ahora flex)
+  .extra-payment-grid {
+    display: flex; // Movido del JSX
+    gap: 1.5rem;
+    margin-bottom: 1.5rem;
+    flex-wrap: wrap;
+
+    .input-group {
+      display: flex;
+      min-width: 200px;
+      gap: 1rem;
+
+      label {
+        margin-top: .7rem;
+      }
+    }
+  }
+
   // Panel customization
   .p-panel {
     margin-bottom: 1.5rem;
@@ -43,22 +75,6 @@
       }
     }
 
-    // Insurance fields grid (3 columns on desktop)
-    .insurance-grid {
-      display: grid;
-      grid-template-columns: 1fr;
-      gap: 1.5rem;
-      margin-bottom: 1.5rem;
-
-      @media (min-width: 640px) {
-        grid-template-columns: repeat(2, 1fr);
-      }
-
-      @media (min-width: 1024px) {
-        grid-template-columns: repeat(3, 1fr);
-      }
-    }
-
     // Extra payment row (horizontal flex layout)
     .extra-payment-row {
       display: flex;
@@ -80,8 +96,9 @@
 
       @media (max-width: 768px) {
         flex-direction: column;
-        
-        .input-group, .button-wrapper {
+
+        .input-group,
+        .button-wrapper {
           width: 100%;
         }
       }
@@ -122,8 +139,9 @@
 
         @media (max-width: 768px) {
           flex-direction: column;
-          
-          .input-group, .button-wrapper {
+
+          .input-group,
+          .button-wrapper {
             width: 100%;
           }
         }
@@ -443,7 +461,6 @@
       background-color: #f3f4f6 !important;
     }
 
-    // Responsive table
     @media (max-width: 768px) {
       font-size: 0.75rem;
 
