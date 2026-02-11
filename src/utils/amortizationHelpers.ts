@@ -287,23 +287,16 @@ export const exportToPDF = async (
   totalPeriods: number,
   paymentFrequency: PaymentFrequency,
 ) => {
-  // Dynamic import
   const jsPDF = (await import("jspdf")).default;
   await import("jspdf-autotable");
 
   const doc = new jsPDF();
 
   // Title
-  doc.setFontSize(18);
-  doc.text("Loan Amortization Schedule", 14, 22);
+  doc.setFontSize(14);
+  doc.text("Loan Amortization Schedule", 14, 18);
 
-  // Summary
-  doc.setFontSize(11);
-  doc.text(`Loan Amount: ${currencyFormat(loanAmount)}`, 14, 35);
-  doc.text(`Annual Rate: ${annualRate}%`, 14, 42);
-  doc.text(`Total ${periodLabel}s: ${totalPeriods}`, 14, 49);
-  doc.text(`Payment Frequency: ${paymentFrequency}`, 14, 56);
-
+  // ---- Totals ----
   const totalInterest = data.reduce((sum, row) => sum + row.interest, 0);
   const totalInsurance = data.reduce((sum, row) => sum + row.insurance, 0);
   const totalExtra = data.reduce((sum, row) => sum + row.extraPayment, 0);
@@ -312,12 +305,58 @@ export const exportToPDF = async (
     0,
   );
 
-  doc.text(`Total Interest: ${currencyFormat(totalInterest)}`, 14, 63);
-  doc.text(`Total Insurance: ${currencyFormat(totalInsurance)}`, 14, 70);
-  doc.text(`Total Extra Payments: ${currencyFormat(totalExtra)}`, 14, 77);
-  doc.text(`Total Paid: ${currencyFormat(totalPaid)}`, 14, 84);
+  const startY = 24;
 
-  // Table headers
+  // ---- LEFT SUMMARY TABLE ----
+  const leftSummary = [
+    ["Loan Amount", currencyFormat(loanAmount)],
+    ["Annual Rate", `${annualRate}%`],
+    [`Total ${periodLabel}s`, totalPeriods.toString()],
+    ["Payment Frequency", paymentFrequency],
+  ];
+
+  (doc as any).autoTable({
+    startY,
+    margin: { left: 14 },
+    tableWidth: 90,
+    body: leftSummary,
+    theme: "grid",
+    styles: { fontSize: 9 },
+    columnStyles: {
+      0: { fontStyle: "bold", cellWidth: 45 },
+      1: { cellWidth: 45 },
+    },
+  });
+
+  const leftFinalY = (doc as any).lastAutoTable.finalY;
+
+  // ---- RIGHT SUMMARY TABLE ----
+  const rightSummary = [
+    ["Total Interest", currencyFormat(totalInterest)],
+    ["Total Insurance", currencyFormat(totalInsurance)],
+    ["Total Extra Payments", currencyFormat(totalExtra)],
+    ["Total Paid", currencyFormat(totalPaid)],
+  ];
+
+  (doc as any).autoTable({
+    startY,
+    margin: { left: 110 }, // Positioned to the right
+    tableWidth: 90,
+    body: rightSummary,
+    theme: "grid",
+    styles: { fontSize: 9 },
+    columnStyles: {
+      0: { fontStyle: "bold", cellWidth: 45 },
+      1: { cellWidth: 45 },
+    },
+  });
+
+  const rightFinalY = (doc as any).lastAutoTable.finalY;
+
+  // Calculate lower Y between both tables
+  const finalY = Math.max(leftFinalY, rightFinalY) + 6;
+
+  // ---- Amortization table headers ----
   const headers = [
     periodLabel,
     "Initial Balance",
@@ -330,7 +369,6 @@ export const exportToPDF = async (
     "Final Balance",
   ];
 
-  // Table data
   const tableData = data.map((row) => [
     row.period,
     currencyFormat(row.initialBalance),
@@ -343,14 +381,14 @@ export const exportToPDF = async (
     currencyFormat(row.finalBalance),
   ]);
 
-  // Add table using autotable
   (doc as any).autoTable({
     head: [headers],
     body: tableData,
-    startY: 95,
+    startY: finalY,
     styles: { fontSize: 8 },
     headStyles: { fillColor: [66, 139, 202] },
   });
 
   doc.save(`amortization_${new Date().getTime()}.pdf`);
 };
+
