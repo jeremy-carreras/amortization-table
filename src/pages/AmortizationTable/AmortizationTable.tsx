@@ -26,11 +26,12 @@ import {
 
 export const AmortizationTable: React.FC = () => {
   // Loan configuration
-  const [annualRate, setAnnualRate] = useState<number>(14.99);
-  const [totalLoan, setTotalLoan] = useState<number>(400000);
+  const [annualRate, setAnnualRate] = useState<number>(10.95);
+  const [totalLoan, setTotalLoan] = useState<number>(3285000);
   const [totalPeriods, setTotalPeriods] = useState<number>(24);
   const [paymentFrequency, setPaymentFrequency] =
     useState<PaymentFrequency>("monthly");
+  const [reduceTerm, setReduceTerm] = useState<boolean>(false);
 
   // Results
   const [table, setTable] = useState<AmortizationRow[]>([]);
@@ -48,10 +49,16 @@ export const AmortizationTable: React.FC = () => {
   // Extra payments
   const [showExtraPayments, setShowExtraPayments] = useState<boolean>(false);
   const [payments, setPayments] = useState<ExtraPayment[]>([]);
-  const [newPaymentPeriod, setNewPaymentPeriod] = useState<number>(3);
-  const [newPaymentAmount, setNewPaymentAmount] = useState<number>(35000);
+  const [newPaymentPeriod, setNewPaymentPeriod] = useState<number>(2);
+  const [newPaymentAmount, setNewPaymentAmount] = useState<number>(13664.13);
   const [nextPaymentId, setNextPaymentId] = useState<number>(1);
   const [paymentsCollapsed, setPaymentsCollapsed] = useState<boolean>(false);
+
+  // Custom First Payment
+  const [showCustomFirstPayment, setShowCustomFirstPayment] = useState<boolean>(false);
+  const [firstPaymentPrincipal, setFirstPaymentPrincipal] = useState<number>(0);
+  const [firstPaymentInterest, setFirstPaymentInterest] = useState<number>(0);
+  const [firstPaymentInsurance, setFirstPaymentInsurance] = useState<number>(0);
 
   // Payment frequency options
   const frequencyOptions = [
@@ -72,6 +79,12 @@ export const AmortizationTable: React.FC = () => {
       { ...insurance, enabled: showInsurance },
       setTable,
       setShowTable,
+      reduceTerm,
+      showCustomFirstPayment ? {
+          principal: firstPaymentPrincipal,
+          interest: firstPaymentInterest,
+          insurance: firstPaymentInsurance
+      } : undefined
     );
   };
 
@@ -89,6 +102,11 @@ export const AmortizationTable: React.FC = () => {
     insurance,
     showInsurance,
     showExtraPayments,
+    reduceTerm,
+    showCustomFirstPayment,
+    firstPaymentPrincipal,
+    firstPaymentInterest,
+    firstPaymentInsurance,
   ]);
 
   /** Add a new extra payment */
@@ -157,7 +175,27 @@ export const AmortizationTable: React.FC = () => {
     );
   };
 
+  // Theme configuration
+  const [isDarkMode, setIsDarkMode] = useState<boolean>(false);
+
+  const toggleTheme = () => {
+    setIsDarkMode(!isDarkMode);
+  };
+
   return (
+    <div className={`amortization-container ${isDarkMode ? 'dark-mode' : 'light-mode'}`}>
+      <div className="header-container">
+        <h1>Amortization table calculator</h1>
+        <div className="theme-switch-wrapper">
+          <i 
+            className={`pi ${isDarkMode ? 'pi-moon' : 'pi-sun'}`} 
+            style={{ fontSize: '1.2rem', marginRight: '0.5rem', cursor: 'pointer' }}
+            onClick={toggleTheme}
+          ></i>
+          <InputSwitch checked={isDarkMode} onChange={(e) => setIsDarkMode(e.value)} />
+        </div>
+      </div>
+
     <div className="amortization-card">
       {/* Main Configuration Section */}
       <Panel header="Loan Configuration" toggleable>
@@ -208,6 +246,15 @@ export const AmortizationTable: React.FC = () => {
                 placeholder="Select frequency"
               />
             </div>
+
+            <div className="input-group">
+                <label>Extra Payment Strategy</label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ fontSize: '0.9rem', color: reduceTerm ? 'var(--text-secondary)' : 'var(--primary-color)', fontWeight: reduceTerm ? 'normal' : 'bold' }}>Reduce Quota</span>
+                    <InputSwitch checked={reduceTerm} onChange={(e) => setReduceTerm(e.value)} />
+                    <span style={{ fontSize: '0.9rem', color: reduceTerm ? 'var(--primary-color)' : 'var(--text-secondary)', fontWeight: reduceTerm ? 'bold' : 'normal' }}>Reduce Term</span>
+                </div>
+            </div>
           </div>
 
           <div className="calculate-btn">
@@ -219,6 +266,70 @@ export const AmortizationTable: React.FC = () => {
             />
           </div>
         </div>
+      </Panel>
+
+      {/* First Payment Configuration Section */}
+       <Panel
+        header="First Payment Configuration"
+        toggleable
+        collapsed={!showCustomFirstPayment}
+        className="mt-3"
+      >
+        <div className="insurance-toggle">
+          <label>Custom First Payment</label>
+          <InputSwitch
+            checked={showCustomFirstPayment}
+            onChange={(e) => setShowCustomFirstPayment(e.value)}
+          />
+        </div>
+
+        {showCustomFirstPayment && (
+          <>
+            <Divider />
+            <div className="insurance-grid">
+                <div className="input-group">
+                    <label htmlFor="firstPrincipal">Principal</label>
+                    <InputNumber
+                        id="firstPrincipal"
+                        value={firstPaymentPrincipal}
+                        onValueChange={(e) => setFirstPaymentPrincipal(e.value ?? 0)}
+                        mode="currency"
+                        currency="USD"
+                        locale="en-US"
+                    />
+                </div>
+                <div className="input-group">
+                    <label htmlFor="firstInterest">Interest</label>
+                    <InputNumber
+                        id="firstInterest"
+                        value={firstPaymentInterest}
+                        onValueChange={(e) => setFirstPaymentInterest(e.value ?? 0)}
+                        mode="currency"
+                        currency="USD"
+                        locale="en-US"
+                    />
+                </div>
+                <div className="input-group">
+                    <label htmlFor="firstInsurance">Insurance</label>
+                    <InputNumber
+                        id="firstInsurance"
+                        value={firstPaymentInsurance}
+                        onValueChange={(e) => setFirstPaymentInsurance(e.value ?? 0)}
+                        mode="currency"
+                        currency="USD"
+                        locale="en-US"
+                    />
+                </div>
+            </div>
+            
+            <div className="input-group mt-3" style={{ maxWidth: '300px' }}>
+                <label>Total First Payment</label>
+                <div style={{ fontSize: '1.2rem', fontWeight: 'bold' }}>
+                    {currencyFormat(firstPaymentPrincipal + firstPaymentInterest + firstPaymentInsurance)}
+                </div>
+            </div>
+          </>
+        )}
       </Panel>
 
       {/* Insurance Configuration Section */}
@@ -272,7 +383,7 @@ export const AmortizationTable: React.FC = () => {
                   }
                   suffix="%"
                   minFractionDigits={2}
-                  maxFractionDigits={4}
+                  maxFractionDigits={6}
                 />
               </div>
 
@@ -629,6 +740,7 @@ export const AmortizationTable: React.FC = () => {
           )}
         </>
       )}
+    </div>
     </div>
   );
 };

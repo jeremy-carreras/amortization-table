@@ -75,6 +75,8 @@ export const calculateAmortization = (
   insuranceConfig: InsuranceConfig,
   setTable: (table: AmortizationRow[]) => void,
   setShowTable: (value: boolean) => void,
+  reduceTerm: boolean = false,
+  firstPaymentConfig?: { principal: number; interest: number; insurance: number },
 ) => {
   let balance = totalLoan;
   let remainingPeriods = totalPeriods;
@@ -84,19 +86,57 @@ export const calculateAmortization = (
   const periodsPerYear = getPeriodsPerYear(paymentFrequency);
   const periodRate = annualRate / 100 / periodsPerYear;
 
-  while (currentPeriod <= totalPeriods && balance > 0) {
-    const payment =
-      (balance * periodRate) /
-      (1 - Math.pow(1 + periodRate, -remainingPeriods));
+  // Calculate fixed payment for "Reduce Term" mode
+  const fixedPayment = 
+      (totalLoan * periodRate) /
+      (1 - Math.pow(1 + periodRate, -totalPeriods));
 
-    const interest = balance * periodRate;
-    const principal = payment - interest;
+  while ((reduceTerm ? balance > 0.01 : currentPeriod <= totalPeriods && balance > 0.01)) {
+    let payment = 0;
+    let interest = 0;
+    let principal = 0;
+    let insuranceBreakdown: InsuranceBreakdown;
+    
+    // Custom First Payment Logic
+    if (currentPeriod === 1 && firstPaymentConfig) {
+        principal = firstPaymentConfig.principal;
+        interest = firstPaymentConfig.interest;
+        const insurance = firstPaymentConfig.insurance;
+        
+        // We override the calculated values with the user provided ones
+        payment = principal + interest;
+        
+        insuranceBreakdown = {
+            fixed: insurance,
+            percentageOfBalance: 0,
+            percentageOfPayment: 0,
+            total: insurance
+        };
+    } else {
+        // Standard Calculation for other periods or if no custom first payment
+        interest = balance * periodRate;
+        
+        if (reduceTerm) {
+            payment = fixedPayment;
+        } else {
+            payment =
+            (balance * periodRate) /
+            (1 - Math.pow(1 + periodRate, -remainingPeriods));
+        }
+        
+        // Adjust payment if it exceeds balance + interest (last payment)
+        if (payment > balance + interest) {
+            payment = balance + interest;
+        }
 
-    const insuranceBreakdown = calculateInsurance(
-      balance,
-      payment,
-      insuranceConfig,
-    );
+        principal = payment - interest;
+        
+        insuranceBreakdown = calculateInsurance(
+          balance,
+          payment,
+          insuranceConfig,
+        );
+    }
 
     const extraPayment = payments
       .filter((p) => p.period === currentPeriod)
@@ -122,7 +162,9 @@ export const calculateAmortization = (
     remainingPeriods--;
     currentPeriod++;
 
-    if (balance <= 0) break;
+    if (balance <= 0.01) break;
+    // Safety break to prevent infinite loops in edge cases
+    if (currentPeriod > totalPeriods * 2) break; 
   }
 
   setTable(rows);
