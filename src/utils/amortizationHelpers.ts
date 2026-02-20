@@ -1,6 +1,7 @@
 import type {
   AmortizationRow,
   ExtraPayment,
+  ExtraPaymentStrategy,
   InsuranceConfig,
   PaymentFrequency,
   InsuranceBreakdown,
@@ -8,6 +9,13 @@ import type {
 
 export const currencyFormat = (value: number): string =>
   value.toLocaleString("en-US", { style: "currency", currency: "USD" });
+
+/**
+ * Round a number to a specific number of decimals
+ */
+const round = (value: number, decimals: number): number => {
+  return Number(Math.round(Number(value + "e" + decimals)) + "e-" + decimals);
+};
 
 /**
  * Get the number of periods per year based on payment frequency
@@ -75,7 +83,7 @@ export const calculateAmortization = (
   insuranceConfig: InsuranceConfig,
   setTable: (table: AmortizationRow[]) => void,
   setShowTable: (value: boolean) => void,
-  reduceTerm: boolean = false,
+  strategy: ExtraPaymentStrategy = "reduceQuota",
   firstPaymentConfig?: { principal: number; interest: number; insurance: number },
 ) => {
   let balance = totalLoan;
@@ -86,64 +94,104 @@ export const calculateAmortization = (
   const periodsPerYear = getPeriodsPerYear(paymentFrequency);
   const periodRate = annualRate / 100 / periodsPerYear;
 
-  // Calculate fixed payment for "Reduce Term" mode
-  const fixedPayment = 
-      (totalLoan * periodRate) /
-      (1 - Math.pow(1 + periodRate, -totalPeriods));
+  const fixedPayment = round(
+    (totalLoan * periodRate) /
+    (1 - Math.pow(1 + periodRate, -totalPeriods)), 4);
 
-  while ((reduceTerm ? balance > 0.01 : currentPeriod <= totalPeriods && balance > 0.01)) {
+  // Cuota fija cuando auto entra en modo "reduce plazo"
+  let fixedAutoPayment: number | null = null;
+
+  const shouldContinue = () => {
+    if (strategy === "reduceQuota") return currentPeriod <= totalPeriods && balance > 0.01;
+    return balance > 0.01;
+  };
+
+  while (shouldContinue()) {
     let payment = 0;
     let interest = 0;
     let principal = 0;
     let insuranceBreakdown: InsuranceBreakdown;
-    
+
     // Custom First Payment Logic
     if (currentPeriod === 1 && firstPaymentConfig) {
-        principal = firstPaymentConfig.principal;
-        interest = firstPaymentConfig.interest;
-        const insurance = firstPaymentConfig.insurance;
-        
-        // We override the calculated values with the user provided ones
-        payment = principal + interest;
-        
-        insuranceBreakdown = {
-            fixed: insurance,
-            percentageOfBalance: 0,
-            percentageOfPayment: 0,
-            total: insurance
-        };
+      principal = round(firstPaymentConfig.principal, 4);
+      interest = round(firstPaymentConfig.interest, 4);
+      const insurance = round(firstPaymentConfig.insurance, 4);
+      payment = round(principal + interest, 4);
+      insuranceBreakdown = {
+        fixed: insurance,
+        percentageOfBalance: 0,
+        percentageOfPayment: 0,
+        total: insurance,
+      };
     } else {
-        // Standard Calculation for other periods or if no custom first payment
-        interest = balance * periodRate;
-        
-        if (reduceTerm) {
-            payment = fixedPayment;
-        } else {
-            payment =
-            (balance * periodRate) /
-            (1 - Math.pow(1 + periodRate, -remainingPeriods));
-        }
-        
-        // Adjust payment if it exceeds balance + interest (last payment)
-        if (payment > balance + interest) {
-            payment = balance + interest;
-        }
+      interest = round(balance * periodRate, 4);
 
-        principal = payment - interest;
-        
-        insuranceBreakdown = calculateInsurance(
-          balance,
-          payment,
-          insuranceConfig,
-        );
+      if (strategy === "auto" && fixedAutoPayment !== null) {
+        // Modo auto en "reduce plazo": mantener la cuota fija
+        payment = fixedAutoPayment;
+
+        // Ajuste último pago
+        if (payment > round(balance + interest, 4)) {
+          payment = round(balance + interest, 4);
+        }
+        principal = round(payment - interest, 4);
+
+      } else if (strategy === "reduceTerm") {
+        payment = fixedPayment;
+
+        if (payment > round(balance + interest, 4)) {
+          payment = round(balance + interest, 4);
+        }
+        principal = round(payment - interest, 4);
+
+      } else {
+        // reduceQuota o auto sin cuota fija: recalcular según balance y períodos restantes
+        payment = round(
+          (balance * periodRate) /
+          (1 - Math.pow(1 + periodRate, -remainingPeriods)), 4);
+
+        if (payment > round(balance + interest, 4)) {
+          payment = round(balance + interest, 4);
+        }
+        principal = round(payment - interest, 4);
+      }
+
+      const rawInsurance = calculateInsurance(balance, payment, insuranceConfig);
+      insuranceBreakdown = {
+        fixed: round(rawInsurance.fixed || 0, 4),
+        percentageOfBalance: round(rawInsurance.percentageOfBalance || 0, 4),
+        percentageOfPayment: round(rawInsurance.percentageOfPayment || 0, 4),
+        total: round(rawInsurance.total, 4),
+      };
     }
 
     const extraPayment = payments
       .filter((p) => p.period === currentPeriod)
       .reduce((sum, p) => sum + p.amount, 0);
 
-    const finalBalance = balance - principal - extraPayment;
-    const totalPayment = payment + insuranceBreakdown.total;
+    // Lógica auto strategy
+    if (strategy === "auto" && extraPayment > 0) {
+      if (extraPayment >= payment) {
+        // Extra >= mensualidad → reduce cuota, plazo igual
+        fixedAutoPayment = null;
+        remainingPeriods++;
+      } else {
+        // Extra < mensualidad → reduce plazo, cuota se congela en el valor actual
+        fixedAutoPayment = payment;
+        const newBalance = round(balance - principal - extraPayment, 4);
+        if (newBalance > 0.01) {
+          const newRemainingPeriods = Math.ceil(
+            -Math.log(1 - (newBalance * periodRate) / payment) /
+              Math.log(1 + periodRate)
+          );
+          remainingPeriods = Math.max(1, newRemainingPeriods) + 1;
+        }
+      }
+    }
+
+    const finalBalance = round(balance - principal - extraPayment, 4);
+    const totalPayment = round(payment + insuranceBreakdown.total, 4);
 
     rows.push({
       period: currentPeriod,
@@ -158,19 +206,17 @@ export const calculateAmortization = (
       insuranceBreakdown,
     });
 
-    balance = finalBalance;
+    balance = finalBalance < 0 ? 0 : finalBalance;
     remainingPeriods--;
     currentPeriod++;
 
     if (balance <= 0.01) break;
-    // Safety break to prevent infinite loops in edge cases
-    if (currentPeriod > totalPeriods * 2) break; 
+    if (currentPeriod > totalPeriods * 3) break;
   }
 
   setTable(rows);
   setShowTable(true);
 };
-
 /**
  * Export amortization table to CSV
  */
@@ -185,7 +231,12 @@ export const exportToCSV = (
     "Initial Balance",
     "Payment",
     ...(showInsurance
-      ? ["Fixed Insurance", "Balance percent", "Payment percent", "Total Insurance"]
+      ? [
+          "Fixed Insurance",
+          "Balance percent",
+          "Payment percent",
+          "Total Insurance",
+        ]
       : []),
     "Total Payment",
     "Interest",
@@ -272,7 +323,12 @@ export const exportToExcel = async (
     "Initial Balance",
     "Payment",
     ...(showInsurance
-      ? ["Fixed Insurance", "Balance percent", "Payment percent", "Total Insurance"]
+      ? [
+          "Fixed Insurance",
+          "Balance percent",
+          "Payment percent",
+          "Total Insurance",
+        ]
       : []),
     "Total Payment",
     "Interest",
@@ -433,4 +489,3 @@ export const exportToPDF = async (
 
   doc.save(`amortization_${new Date().getTime()}.pdf`);
 };
-

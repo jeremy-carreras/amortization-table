@@ -33,6 +33,14 @@ export interface InsuranceConfig {
 
 export type PaymentFrequency = "monthly" | "biweekly" | "weekly";
 
+/**
+ * Strategy for handling extra capital payments:
+ * - "reduceQuota": always reduce the monthly payment (keep term)
+ * - "reduceTerm": always reduce the remaining term (keep payment)
+ * - "auto": if extra payment < current payment → reduce term; if >= current payment → reduce quota
+ */
+export type ExtraPaymentStrategy = "reduceQuota" | "reduceTerm" | "auto";
+
 export interface LoanConfig {
   annualRate: number;
   totalLoan: number;

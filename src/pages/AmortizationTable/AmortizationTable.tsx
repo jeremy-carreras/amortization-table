@@ -12,6 +12,7 @@ import "./AmortizationTable.scss";
 import type {
   AmortizationRow,
   ExtraPayment,
+  ExtraPaymentStrategy,
   PaymentFrequency,
   InsuranceConfig,
 } from "./IAmortizationTable";
@@ -28,10 +29,10 @@ export const AmortizationTable: React.FC = () => {
   // Loan configuration
   const [annualRate, setAnnualRate] = useState<number>(10.95);
   const [totalLoan, setTotalLoan] = useState<number>(3285000);
-  const [totalPeriods, setTotalPeriods] = useState<number>(24);
+  const [totalPeriods, setTotalPeriods] = useState<number>(240);
   const [paymentFrequency, setPaymentFrequency] =
     useState<PaymentFrequency>("monthly");
-  const [reduceTerm, setReduceTerm] = useState<boolean>(false);
+  const [strategy, setStrategy] = useState<ExtraPaymentStrategy>("reduceQuota");
 
   // Results
   const [table, setTable] = useState<AmortizationRow[]>([]);
@@ -56,9 +57,9 @@ export const AmortizationTable: React.FC = () => {
 
   // Custom First Payment
   const [showCustomFirstPayment, setShowCustomFirstPayment] = useState<boolean>(false);
-  const [firstPaymentPrincipal, setFirstPaymentPrincipal] = useState<number>(0);
-  const [firstPaymentInterest, setFirstPaymentInterest] = useState<number>(0);
-  const [firstPaymentInsurance, setFirstPaymentInsurance] = useState<number>(0);
+  const [firstPaymentPrincipal, setFirstPaymentPrincipal] = useState<number>(3820.05);
+  const [firstPaymentInterest, setFirstPaymentInterest] = useState<number>(1998.38);
+  const [firstPaymentInsurance, setFirstPaymentInsurance] = useState<number>(169.51);
 
   // Payment frequency options
   const frequencyOptions = [
@@ -79,7 +80,7 @@ export const AmortizationTable: React.FC = () => {
       { ...insurance, enabled: showInsurance },
       setTable,
       setShowTable,
-      reduceTerm,
+      strategy,
       showCustomFirstPayment ? {
           principal: firstPaymentPrincipal,
           interest: firstPaymentInterest,
@@ -102,7 +103,7 @@ export const AmortizationTable: React.FC = () => {
     insurance,
     showInsurance,
     showExtraPayments,
-    reduceTerm,
+    strategy,
     showCustomFirstPayment,
     firstPaymentPrincipal,
     firstPaymentInterest,
@@ -247,14 +248,6 @@ export const AmortizationTable: React.FC = () => {
               />
             </div>
 
-            <div className="input-group">
-                <label>Extra Payment Strategy</label>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span style={{ fontSize: '0.9rem', color: reduceTerm ? 'var(--text-secondary)' : 'var(--primary-color)', fontWeight: reduceTerm ? 'normal' : 'bold' }}>Reduce Quota</span>
-                    <InputSwitch checked={reduceTerm} onChange={(e) => setReduceTerm(e.value)} />
-                    <span style={{ fontSize: '0.9rem', color: reduceTerm ? 'var(--primary-color)' : 'var(--text-secondary)', fontWeight: reduceTerm ? 'bold' : 'normal' }}>Reduce Term</span>
-                </div>
-            </div>
           </div>
 
           <div className="calculate-btn">
@@ -422,6 +415,28 @@ export const AmortizationTable: React.FC = () => {
             onChange={(e) => setShowExtraPayments(e.value)}
           />
         </div>
+
+        <div className="input-group" style={{ marginTop: '1rem' }}>
+          <label>Extra Payment Strategy</label>
+          <Dropdown
+            value={strategy}
+            options={[
+              { label: "Reduce Quota (keep term)", value: "reduceQuota" },
+              { label: "Reduce Term (keep quota)", value: "reduceTerm" },
+              { label: "Auto (smart)", value: "auto" },
+            ]}
+            onChange={(e) => setStrategy(e.value as ExtraPaymentStrategy)}
+            placeholder="Select strategy"
+          />
+          <small style={{ color: 'var(--text-secondary)', fontSize: '0.75rem' }}>
+            {strategy === "auto"
+              ? "If extra < quota → reduces term; if extra ≥ quota → reduces quota"
+              : strategy === "reduceTerm"
+              ? "Extra payments shorten the loan term"
+              : "Extra payments lower the monthly payment"}
+          </small>
+        </div>
+
 
         {showExtraPayments && (
           <>
