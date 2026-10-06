@@ -308,6 +308,13 @@
     }
   }
 
+  /* On iPhone-width the insurance fields read better one per row. */
+  .insurance-grid {
+    @media (max-width: 480px) {
+      grid-template-columns: 1fr;
+    }
+  }
+
   /* Add-extra-payment row: period + amount share a row, the button spans
      the full width underneath on mobile (it's the primary action here). */
   .extra-payment-grid {
@@ -322,15 +329,21 @@
       align-items: flex-end;
     }
 
+    /* Keep the add-payment row on a single line on mobile: the period
+       column is only 2-3 digits so it stays narrow, amount fills the rest
+       and the button collapses to just its "+" icon. */
     @media (max-width: 640px) {
-      grid-template-columns: 1fr 1fr;
+      grid-template-columns: 5.5rem 1fr auto;
+      gap: 0.5rem;
 
-      .button-wrapper {
-        grid-column: 1 / -1;
-
-        .p-button {
-          width: 100%;
+      .add-payment-btn {
+        .p-button-label {
+          display: none;
         }
+        .p-button-icon {
+          margin: 0;
+        }
+        padding: 0.5rem 0.75rem;
       }
     }
   }
@@ -429,9 +442,8 @@
           align-items: flex-end;
           flex-wrap: wrap;
 
-          /* On mobile: period and amount sit side-by-side, and the delete
-             button stays a compact icon pinned to the end — no full-width
-             stacking. */
+          /* Tablet / large phone: period + amount share the row, delete
+             stays a compact icon pinned to the end. */
           @media (max-width: 640px) {
             align-items: flex-end;
 
@@ -441,12 +453,37 @@
             }
           }
 
+          /* iPhone-width: the period field only ever holds 2-3 digits, so
+             keep it narrow; amount takes the remaining space and the delete
+             button stays a compact icon on the same row. */
+          @media (max-width: 480px) {
+            gap: 0.5rem;
+            flex-wrap: nowrap;
+            align-items: flex-end;
+
+            .payment-field:first-of-type {
+              flex: 0 0 5.5rem;
+            }
+
+            .payment-field:nth-of-type(2) {
+              flex: 1 1 auto;
+            }
+
+            .p-button {
+              flex: 0 0 auto;
+            }
+          }
+
           .payment-field {
             flex: 1;
             min-width: 120px;
             display: flex;
             flex-direction: column;
             gap: 0.5rem;
+
+            @media (max-width: 480px) {
+              min-width: 0;
+            }
 
             label {
               font-weight: 600;
@@ -517,6 +554,16 @@
           justify-content: center;
           padding: 0.5rem 0.75rem;
           font-size: 0.875rem;
+        }
+      }
+
+      /* iPhone-width: one export option per row for easier tapping. */
+      @media (max-width: 480px) {
+        flex-direction: column;
+
+        .p-button {
+          flex: 1 1 auto;
+          width: 100%;
         }
       }
     }

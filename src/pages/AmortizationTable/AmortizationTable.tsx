@@ -495,9 +495,8 @@ export const AmortizationTable: React.FC = () => {
                 <Button
                   label="Add Payment"
                   icon="pi pi-plus"
-                  className="p-button-raised p-button-success"
+                  className="p-button-raised p-button-success add-payment-btn"
                   onClick={addPayment}
-                  style={{ padding: "0.5rem 1.5rem" }}
                 />
               </div>
             </div>
@@ -570,7 +569,7 @@ export const AmortizationTable: React.FC = () => {
                             icon="pi pi-trash"
                             className="p-button-raised p-button-danger p-button-sm"
                             onClick={() => deletePayment(p.id)}
-                            tooltip="Delete payment"
+                            aria-label="Delete payment"
                           />
                         </div>
                       </div>

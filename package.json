@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "tsc && vite build && vite preview"
+    "preview": "tsc && vite build && vite preview",
+    "preview:watch": "vite build --watch & vite preview"
   },
   "dependencies": {
     "jspdf": "^2.5.2",
