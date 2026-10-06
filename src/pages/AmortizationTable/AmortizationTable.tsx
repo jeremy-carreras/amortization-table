@@ -177,11 +177,33 @@ export const AmortizationTable: React.FC = () => {
   };
 
   // Theme configuration
-  const [isDarkMode, setIsDarkMode] = useState<boolean>(false);
+  const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    const saved = window.localStorage.getItem("amortization-theme");
+    if (saved === "dark") return true;
+    if (saved === "light") return false;
+    // No saved preference → follow the system setting.
+    return window.matchMedia?.("(prefers-color-scheme: dark)").matches ?? false;
+  });
 
   const toggleTheme = () => {
     setIsDarkMode(!isDarkMode);
   };
+
+  // Propagate the theme class to <html> so PrimeReact overlays
+  // (dropdown panels, tooltips) rendered in the body are themed too,
+  // and persist the choice across reloads.
+  useEffect(() => {
+    const root = document.documentElement;
+    const theme = isDarkMode ? "dark-mode" : "light-mode";
+    const other = isDarkMode ? "light-mode" : "dark-mode";
+    root.classList.add(theme);
+    root.classList.remove(other);
+    window.localStorage.setItem("amortization-theme", isDarkMode ? "dark" : "light");
+    return () => {
+      root.classList.remove("dark-mode", "light-mode");
+    };
+  }, [isDarkMode]);
 
   return (
     <div className={`amortization-container ${isDarkMode ? 'dark-mode' : 'light-mode'}`}>
@@ -448,7 +470,6 @@ export const AmortizationTable: React.FC = () => {
                   Extra Payment {periodLabel}
                 </label>
                 <InputNumber
-                  size={4}
                   id="extraPaymentPeriod"
                   value={newPaymentPeriod}
                   onValueChange={(e) => setNewPaymentPeriod(e.value ?? 0)}
