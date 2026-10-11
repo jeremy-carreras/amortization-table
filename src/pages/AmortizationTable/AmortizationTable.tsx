@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { DataTable } from "primereact/datatable";
 import { Column } from "primereact/column";
 import { InputNumber } from "primereact/inputnumber";
@@ -26,40 +27,76 @@ import {
 } from "../../utils/amortizationHelpers";
 
 export const AmortizationTable: React.FC = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // --- URL param helpers ---
+  const getNum = (key: string, fallback: number): number => {
+    const raw = searchParams.get(key);
+    if (raw === null) return fallback;
+    const n = Number(raw);
+    return Number.isFinite(n) ? n : fallback;
+  };
+  const getBool = (key: string, fallback: boolean): boolean => {
+    const raw = searchParams.get(key);
+    if (raw === null) return fallback;
+    return raw === "true" || raw === "1";
+  };
+  const getStr = <T extends string>(key: string, fallback: T): T => {
+    const raw = searchParams.get(key);
+    return (raw as T) ?? fallback;
+  };
+  const getPayments = (): ExtraPayment[] => {
+    const raw = searchParams.get("payments");
+    if (!raw) return [];
+    try {
+      // Format: "period:amount,period:amount"
+      return raw
+        .split(",")
+        .map((pair, idx) => {
+          const [period, amount] = pair.split(":").map(Number);
+          if (!Number.isFinite(period) || !Number.isFinite(amount)) return null;
+          return { id: idx + 1, period, amount };
+        })
+        .filter((p): p is ExtraPayment => p !== null);
+    } catch {
+      return [];
+    }
+  };
+
   // Loan configuration
-  const [annualRate, setAnnualRate] = useState<number>(10.95);
-  const [totalLoan, setTotalLoan] = useState<number>(3285000);
-  const [totalPeriods, setTotalPeriods] = useState<number>(240);
+  const [annualRate, setAnnualRate] = useState<number>(() => getNum("annualRate", 10.95));
+  const [totalLoan, setTotalLoan] = useState<number>(() => getNum("totalLoan", 3285000));
+  const [totalPeriods, setTotalPeriods] = useState<number>(() => getNum("totalPeriods", 240));
   const [paymentFrequency, setPaymentFrequency] =
-    useState<PaymentFrequency>("monthly");
-  const [strategy, setStrategy] = useState<ExtraPaymentStrategy>("reduceQuota");
+    useState<PaymentFrequency>(() => getStr<PaymentFrequency>("paymentFrequency", "monthly"));
+  const [strategy, setStrategy] = useState<ExtraPaymentStrategy>(() => getStr<ExtraPaymentStrategy>("strategy", "reduceQuota"));
 
   // Results
   const [table, setTable] = useState<AmortizationRow[]>([]);
   const [showTable, setShowTable] = useState<boolean>(false);
 
   // Insurance configuration
-  const [showInsurance, setShowInsurance] = useState<boolean>(false);
-  const [insurance, setInsurance] = useState<InsuranceConfig>({
+  const [showInsurance, setShowInsurance] = useState<boolean>(() => getBool("showInsurance", false));
+  const [insurance, setInsurance] = useState<InsuranceConfig>(() => ({
     enabled: false,
-    fixedAmount: 0,
-    percentageOfBalance: 0,
-    percentageOfPayment: 0,
-  });
+    fixedAmount: getNum("insuranceFixedAmount", 0),
+    percentageOfBalance: getNum("insurancePercentageOfBalance", 0),
+    percentageOfPayment: getNum("insurancePercentageOfPayment", 0),
+  }));
 
   // Extra payments
-  const [showExtraPayments, setShowExtraPayments] = useState<boolean>(false);
-  const [payments, setPayments] = useState<ExtraPayment[]>([]);
+  const [showExtraPayments, setShowExtraPayments] = useState<boolean>(() => getBool("showExtraPayments", false));
+  const [payments, setPayments] = useState<ExtraPayment[]>(() => getPayments());
   const [newPaymentPeriod, setNewPaymentPeriod] = useState<number>(2);
   const [newPaymentAmount, setNewPaymentAmount] = useState<number>(13664.13);
-  const [nextPaymentId, setNextPaymentId] = useState<number>(1);
+  const [nextPaymentId, setNextPaymentId] = useState<number>(() => getPayments().length + 1);
   const [paymentsCollapsed, setPaymentsCollapsed] = useState<boolean>(false);
 
   // Custom First Payment
-  const [showCustomFirstPayment, setShowCustomFirstPayment] = useState<boolean>(false);
-  const [firstPaymentPrincipal, setFirstPaymentPrincipal] = useState<number>(3820.05);
-  const [firstPaymentInterest, setFirstPaymentInterest] = useState<number>(1998.38);
-  const [firstPaymentInsurance, setFirstPaymentInsurance] = useState<number>(169.51);
+  const [showCustomFirstPayment, setShowCustomFirstPayment] = useState<boolean>(() => getBool("showCustomFirstPayment", false));
+  const [firstPaymentPrincipal, setFirstPaymentPrincipal] = useState<number>(() => getNum("firstPaymentPrincipal", 3820.05));
+  const [firstPaymentInterest, setFirstPaymentInterest] = useState<number>(() => getNum("firstPaymentInterest", 1998.38));
+  const [firstPaymentInsurance, setFirstPaymentInsurance] = useState<number>(() => getNum("firstPaymentInsurance", 169.51));
 
   // Payment frequency options
   const frequencyOptions = [
@@ -108,6 +145,51 @@ export const AmortizationTable: React.FC = () => {
     firstPaymentPrincipal,
     firstPaymentInterest,
     firstPaymentInsurance,
+  ]);
+
+  // Sync all input values to the URL query params
+  useEffect(() => {
+    const params = new URLSearchParams();
+
+    params.set("annualRate", String(annualRate));
+    params.set("totalLoan", String(totalLoan));
+    params.set("totalPeriods", String(totalPeriods));
+    params.set("paymentFrequency", paymentFrequency);
+    params.set("strategy", strategy);
+
+    params.set("showInsurance", String(showInsurance));
+    params.set("insuranceFixedAmount", String(insurance.fixedAmount));
+    params.set("insurancePercentageOfBalance", String(insurance.percentageOfBalance));
+    params.set("insurancePercentageOfPayment", String(insurance.percentageOfPayment));
+
+    params.set("showCustomFirstPayment", String(showCustomFirstPayment));
+    params.set("firstPaymentPrincipal", String(firstPaymentPrincipal));
+    params.set("firstPaymentInterest", String(firstPaymentInterest));
+    params.set("firstPaymentInsurance", String(firstPaymentInsurance));
+
+    params.set("showExtraPayments", String(showExtraPayments));
+    if (payments.length > 0) {
+      params.set(
+        "payments",
+        payments.map((p) => `${p.period}:${p.amount}`).join(","),
+      );
+    }
+
+    setSearchParams(params, { replace: true });
+  }, [
+    annualRate,
+    totalLoan,
+    totalPeriods,
+    paymentFrequency,
+    strategy,
+    showInsurance,
+    insurance,
+    showCustomFirstPayment,
+    firstPaymentPrincipal,
+    firstPaymentInterest,
+    firstPaymentInsurance,
+    showExtraPayments,
+    payments,
   ]);
 
   /** Add a new extra payment */
