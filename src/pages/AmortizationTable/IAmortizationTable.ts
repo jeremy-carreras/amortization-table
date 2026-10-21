@@ -18,10 +18,19 @@ export interface InsuranceBreakdown {
   total: number;
 }
 
+/**
+ * Type of extra payment:
+ * - "extra": `amount` is an additional payment on top of the normal payment for that period.
+ * - "exact": `amount` is the EXACT total the user wants to pay that period;
+ *   the extra payment is derived as `amount - normalTotalPayment`.
+ */
+export type ExtraPaymentType = "extra" | "exact";
+
 export interface ExtraPayment {
   id: number;
   period: number;
   amount: number;
+  type: ExtraPaymentType;
 }
 
 export interface InsuranceConfig {

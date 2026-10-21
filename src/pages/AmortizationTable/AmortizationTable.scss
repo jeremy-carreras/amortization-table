@@ -150,6 +150,53 @@
    Layout
    ========================================================================= */
 
+/* =========================================================================
+   Global loading overlay — covers the whole viewport and blocks interaction
+   while the amortization schedule is being (re)calculated.
+   ========================================================================= */
+
+.loading-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(15, 23, 42, 0.55);
+  backdrop-filter: blur(2px);
+  cursor: wait;
+  /* Block every pointer interaction underneath. */
+  pointer-events: all;
+
+  .loading-overlay__content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+    padding: 2rem 2.5rem;
+    border-radius: 1rem;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    box-shadow: var(--card-shadow);
+    max-width: calc(100vw - 2rem);
+
+    @media (max-width: 480px) {
+      padding: 1.5rem;
+    }
+  }
+
+  .loading-overlay__text {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+
+  .p-progress-spinner {
+    width: 56px;
+    height: 56px;
+  }
+}
+
 .amortization-container {
   min-height: 100vh;
   background-color: var(--bg-primary);
@@ -315,11 +362,13 @@
     }
   }
 
-  /* Add-extra-payment row: period + amount share a row, the button spans
-     the full width underneath on mobile (it's the primary action here). */
+  /* Add-extra-payment row: period + type + amount + button.
+     On wide screens all four share a single row; on narrower screens the
+     fields wrap to a flexible auto-fit grid so nothing overflows, with the
+     action button spanning the full width underneath. */
   .extra-payment-grid {
     display: grid;
-    grid-template-columns: 1fr 1fr auto;
+    grid-template-columns: minmax(6rem, 0.6fr) minmax(10rem, 1fr) minmax(10rem, 1fr) auto;
     gap: 1rem;
     margin-bottom: 1.5rem;
     align-items: end;
@@ -329,22 +378,23 @@
       align-items: flex-end;
     }
 
-    /* Keep the add-payment row on a single line on mobile: the period
-       column is only 2-3 digits so it stays narrow, amount fills the rest
-       and the button collapses to just its "+" icon. */
-    @media (max-width: 640px) {
-      grid-template-columns: 5.5rem 1fr auto;
-      gap: 0.5rem;
+    /* Tablet / large phone: two fields per row, button full-width below. */
+    @media (max-width: 820px) {
+      grid-template-columns: 1fr 1fr;
 
-      .add-payment-btn {
-        .p-button-label {
-          display: none;
+      .button-wrapper {
+        grid-column: 1 / -1;
+
+        .add-payment-btn {
+          width: 100%;
         }
-        .p-button-icon {
-          margin: 0;
-        }
-        padding: 0.5rem 0.75rem;
       }
+    }
+
+    /* iPhone-width: one field per row for comfortable tapping. */
+    @media (max-width: 480px) {
+      grid-template-columns: 1fr;
+      gap: 0.75rem;
     }
   }
 
@@ -442,31 +492,31 @@
           align-items: flex-end;
           flex-wrap: wrap;
 
-          /* Tablet / large phone: period + amount share the row, delete
-             stays a compact icon pinned to the end. */
+          /* Tablet / large phone: fields share rows and wrap, delete stays a
+             compact icon pinned to the end. */
           @media (max-width: 640px) {
             align-items: flex-end;
 
             .payment-field {
-              flex: 1 1 0;
+              flex: 1 1 8rem;
               min-width: 0;
             }
           }
 
-          /* iPhone-width: the period field only ever holds 2-3 digits, so
-             keep it narrow; amount takes the remaining space and the delete
-             button stays a compact icon on the same row. */
+          /* iPhone-width: period is narrow (2-3 digits), type + amount take a
+             full row each, and the delete button sits beside the period. */
           @media (max-width: 480px) {
             gap: 0.5rem;
-            flex-wrap: nowrap;
+            flex-wrap: wrap;
             align-items: flex-end;
 
             .payment-field:first-of-type {
-              flex: 0 0 5.5rem;
+              flex: 1 1 5.5rem;
             }
 
-            .payment-field:nth-of-type(2) {
-              flex: 1 1 auto;
+            .payment-field:nth-of-type(2),
+            .payment-field:nth-of-type(3) {
+              flex: 1 1 100%;
             }
 
             .p-button {
@@ -492,7 +542,8 @@
               margin: 0;
             }
 
-            .p-inputnumber {
+            .p-inputnumber,
+            .p-dropdown {
               width: 100%;
             }
           }

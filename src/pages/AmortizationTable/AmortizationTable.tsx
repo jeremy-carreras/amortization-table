@@ -9,11 +9,13 @@ import { Dropdown } from "primereact/dropdown";
 import { Panel } from "primereact/panel";
 import { Accordion, AccordionTab } from "primereact/accordion";
 import { Divider } from "primereact/divider";
+import { ProgressSpinner } from "primereact/progressspinner";
 import "./AmortizationTable.scss";
 import type {
   AmortizationRow,
   ExtraPayment,
   ExtraPaymentStrategy,
+  ExtraPaymentType,
   PaymentFrequency,
   InsuranceConfig,
 } from "./IAmortizationTable";
@@ -49,13 +51,17 @@ export const AmortizationTable: React.FC = () => {
     const raw = searchParams.get("payments");
     if (!raw) return [];
     try {
-      // Format: "period:amount,period:amount"
+      // Format: "period:amount:type,period:amount:type"
+      // `type` is optional for backward compatibility (defaults to "extra").
       return raw
         .split(",")
         .map((pair, idx) => {
-          const [period, amount] = pair.split(":").map(Number);
+          const parts = pair.split(":");
+          const period = Number(parts[0]);
+          const amount = Number(parts[1]);
+          const type: ExtraPaymentType = parts[2] === "exact" ? "exact" : "extra";
           if (!Number.isFinite(period) || !Number.isFinite(amount)) return null;
-          return { id: idx + 1, period, amount };
+          return { id: idx + 1, period, amount, type };
         })
         .filter((p): p is ExtraPayment => p !== null);
     } catch {
@@ -74,6 +80,7 @@ export const AmortizationTable: React.FC = () => {
   // Results
   const [table, setTable] = useState<AmortizationRow[]>([]);
   const [showTable, setShowTable] = useState<boolean>(false);
+  const [isCalculating, setIsCalculating] = useState<boolean>(false);
 
   // Insurance configuration
   const [showInsurance, setShowInsurance] = useState<boolean>(() => getBool("showInsurance", false));
@@ -89,6 +96,7 @@ export const AmortizationTable: React.FC = () => {
   const [payments, setPayments] = useState<ExtraPayment[]>(() => getPayments());
   const [newPaymentPeriod, setNewPaymentPeriod] = useState<number>(2);
   const [newPaymentAmount, setNewPaymentAmount] = useState<number>(13664.13);
+  const [newPaymentType, setNewPaymentType] = useState<ExtraPaymentType>("extra");
   const [nextPaymentId, setNextPaymentId] = useState<number>(() => getPayments().length + 1);
   const [paymentsCollapsed, setPaymentsCollapsed] = useState<boolean>(false);
 
@@ -108,22 +116,42 @@ export const AmortizationTable: React.FC = () => {
   const periodLabel = getPeriodLabel(paymentFrequency);
 
   const calculateAmortizationProcess = () => {
-    calculateAmortization(
-      totalLoan,
-      totalPeriods,
-      annualRate,
-      paymentFrequency,
-      showExtraPayments ? payments : [],
-      { ...insurance, enabled: showInsurance },
-      setTable,
-      setShowTable,
-      strategy,
-      showCustomFirstPayment ? {
-          principal: firstPaymentPrincipal,
-          interest: firstPaymentInterest,
-          insurance: firstPaymentInsurance
-      } : undefined
-    );
+    // Show the global loading overlay, then defer the work so the overlay
+    // actually paints and blocks interaction before the main thread gets busy.
+    setIsCalculating(true);
+    requestAnimationFrame(() => {
+      setTimeout(() => {
+        // 1) Run the (synchronous) calculation and push the new rows to state.
+        //    This schedules a re-render of the heavy DataTable.
+        calculateAmortization(
+          totalLoan,
+          totalPeriods,
+          annualRate,
+          paymentFrequency,
+          showExtraPayments ? payments : [],
+          { ...insurance, enabled: showInsurance },
+          setTable,
+          setShowTable,
+          strategy,
+          showCustomFirstPayment ? {
+              principal: firstPaymentPrincipal,
+              interest: firstPaymentInterest,
+              insurance: firstPaymentInsurance
+          } : undefined
+        );
+
+        // 2) Keep the overlay up while React reconciles and the browser paints
+        //    the new table. Turning it off here (same tick as setTable) would
+        //    remove the overlay right before the expensive DataTable render,
+        //    exposing the lag. Instead we wait for two animation frames so the
+        //    table has been committed and painted, then hide the overlay.
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            setIsCalculating(false);
+          });
+        });
+      }, 0);
+    });
   };
 
   // Auto recalculation when modifying parameters
@@ -171,7 +199,7 @@ export const AmortizationTable: React.FC = () => {
     if (payments.length > 0) {
       params.set(
         "payments",
-        payments.map((p) => `${p.period}:${p.amount}`).join(","),
+        payments.map((p) => `${p.period}:${p.amount}:${p.type}`).join(","),
       );
     }
 
@@ -206,9 +234,16 @@ export const AmortizationTable: React.FC = () => {
         id: nextPaymentId,
         period: newPaymentPeriod,
         amount: newPaymentAmount,
+        type: newPaymentType,
       },
     ]);
     setNextPaymentId((prev) => prev + 1);
+  };
+
+  /** Add the payment when submitting the form (e.g. pressing Enter on any input) */
+  const handlePaymentSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    addPayment();
   };
 
   /** Delete an existing payment */
@@ -219,13 +254,18 @@ export const AmortizationTable: React.FC = () => {
   /** Update an existing payment */
   const updatePayment = (
     id: number,
-    field: "period" | "amount",
-    value: number,
+    field: "period" | "amount" | "type",
+    value: number | ExtraPaymentType,
   ) => {
     setPayments((prev) =>
       prev.map((p) => (p.id === id ? { ...p, [field]: value } : p)),
     );
   };
+
+  const paymentTypeOptions = [
+    { label: "Additional (on top)", value: "extra" as ExtraPaymentType },
+    { label: "Exact total for period", value: "exact" as ExtraPaymentType },
+  ];
 
   /** Export handlers */
   const handleExportCSV = () => {
@@ -289,6 +329,25 @@ export const AmortizationTable: React.FC = () => {
 
   return (
     <div className={`amortization-container ${isDarkMode ? 'dark-mode' : 'light-mode'}`}>
+      {/* Full-screen loading overlay — blocks all interaction while the
+          amortization schedule is being (re)calculated. */}
+      {isCalculating && (
+        <div
+          className="loading-overlay"
+          role="alertdialog"
+          aria-busy="true"
+          aria-live="assertive"
+          aria-label="Calculating amortization schedule"
+        >
+          <div className="loading-overlay__content">
+            <ProgressSpinner
+              strokeWidth="4"
+              aria-label="Loading"
+            />
+            <span className="loading-overlay__text">Calculating…</span>
+          </div>
+        </div>
+      )}
       <div className="header-container">
         <h1>Amortization table calculator</h1>
         <div className="theme-switch-wrapper">
@@ -546,7 +605,7 @@ export const AmortizationTable: React.FC = () => {
           <>
             <Divider />
             {/* Add new extra payment */}
-            <div className="extra-payment-grid">
+            <form className="extra-payment-grid" onSubmit={handlePaymentSubmit}>
               <div className="input-group">
                 <label htmlFor="extraPaymentPeriod">
                   Extra Payment {periodLabel}
@@ -562,7 +621,27 @@ export const AmortizationTable: React.FC = () => {
               </div>
 
               <div className="input-group">
-                <label htmlFor="extraPaymentAmount">Extra Payment Amount</label>
+                <label htmlFor="extraPaymentType">Payment Type</label>
+                <Dropdown
+                  id="extraPaymentType"
+                  value={newPaymentType}
+                  options={paymentTypeOptions}
+                  onChange={(e) => setNewPaymentType(e.value as ExtraPaymentType)}
+                  placeholder="Select type"
+                />
+              </div>
+
+              <div className="input-group">
+                <label htmlFor="extraPaymentAmount">
+                  {newPaymentType === "exact"
+                    ? "Exact Total to Pay"
+                    : "Extra Payment Amount"}
+                </label>
+                <small style={{ color: 'var(--text-secondary)', fontSize: '0.75rem' }}>
+                  {newPaymentType === "exact"
+                    ? "The extra applied is this total minus the normal payment of that period."
+                    : "This amount is added on top of the normal payment of that period."}
+                </small>
                 <InputNumber
                   id="extraPaymentAmount"
                   value={newPaymentAmount}
@@ -575,13 +654,13 @@ export const AmortizationTable: React.FC = () => {
 
               <div className="button-wrapper">
                 <Button
+                  type="submit"
                   label="Add Payment"
                   icon="pi pi-plus"
                   className="p-button-raised p-button-success add-payment-btn"
-                  onClick={addPayment}
                 />
               </div>
-            </div>
+            </form>
 
             {/* Existing payments list */}
             {payments.length > 0 && (
@@ -632,7 +711,23 @@ export const AmortizationTable: React.FC = () => {
                             />
                           </div>
                           <div className="payment-field">
-                            <label>Amount</label>
+                            <label>Type</label>
+                            <Dropdown
+                              value={p.type}
+                              options={paymentTypeOptions}
+                              onChange={(e) =>
+                                updatePayment(
+                                  p.id,
+                                  "type",
+                                  e.value as ExtraPaymentType,
+                                )
+                              }
+                            />
+                          </div>
+                          <div className="payment-field">
+                            <label>
+                              {p.type === "exact" ? "Exact Total" : "Amount"}
+                            </label>
                             <InputNumber
                               value={p.amount}
                               onValueChange={(e) =>

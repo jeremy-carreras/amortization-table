@@ -166,9 +166,22 @@ export const calculateAmortization = (
       };
     }
 
+    // Normal total payment for this period (payment + insurance), before any extra.
+    const normalTotalPayment = round(payment + insuranceBreakdown.total, 4);
+
+    // Resolve extra payments for this period.
+    // - "extra": amount is added on top of the normal payment.
+    // - "exact": amount is the exact total the user wants to pay this period;
+    //   the extra portion is (amount - normalTotalPayment), clamped to >= 0.
     const extraPayment = payments
       .filter((p) => p.period === currentPeriod)
-      .reduce((sum, p) => sum + p.amount, 0);
+      .reduce((sum, p) => {
+        if (p.type === "exact") {
+          const derived = round(p.amount - normalTotalPayment, 4);
+          return sum + (derived > 0 ? derived : 0);
+        }
+        return sum + p.amount;
+      }, 0);
 
     // Lógica auto strategy
     if (strategy === "auto" && extraPayment > 0) {
@@ -191,7 +204,7 @@ export const calculateAmortization = (
     }
 
     const finalBalance = round(balance - principal - extraPayment, 4);
-    const totalPayment = round(payment + insuranceBreakdown.total, 4);
+    const totalPayment = normalTotalPayment;
 
     rows.push({
       period: currentPeriod,
