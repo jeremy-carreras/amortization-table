@@ -94,9 +94,11 @@ export const calculateAmortization = (
   const periodsPerYear = getPeriodsPerYear(paymentFrequency);
   const periodRate = annualRate / 100 / periodsPerYear;
 
-  const fixedPayment = round(
-    (totalLoan * periodRate) /
-    (1 - Math.pow(1 + periodRate, -totalPeriods)), 4);
+  const fixedPayment = periodRate === 0
+    ? round(totalLoan / totalPeriods, 4)
+    : round(
+      (totalLoan * periodRate) /
+      (1 - Math.pow(1 + periodRate, -totalPeriods)), 4);
 
   // Cuota fija cuando auto entra en modo "reduce plazo"
   let fixedAutoPayment: number | null = null;
@@ -147,9 +149,11 @@ export const calculateAmortization = (
 
       } else {
         // reduceQuota o auto sin cuota fija: recalcular según balance y períodos restantes
-        payment = round(
-          (balance * periodRate) /
-          (1 - Math.pow(1 + periodRate, -remainingPeriods)), 4);
+        payment = periodRate === 0
+          ? round(balance / remainingPeriods, 4)
+          : round(
+            (balance * periodRate) /
+            (1 - Math.pow(1 + periodRate, -remainingPeriods)), 4);
 
         if (payment > round(balance + interest, 4)) {
           payment = round(balance + interest, 4);
@@ -194,10 +198,12 @@ export const calculateAmortization = (
         fixedAutoPayment = payment;
         const newBalance = round(balance - principal - extraPayment, 4);
         if (newBalance > 0.01) {
-          const newRemainingPeriods = Math.ceil(
-            -Math.log(1 - (newBalance * periodRate) / payment) /
-              Math.log(1 + periodRate)
-          );
+          const newRemainingPeriods = periodRate === 0
+            ? Math.ceil(newBalance / payment)
+            : Math.ceil(
+              -Math.log(1 - (newBalance * periodRate) / payment) /
+                Math.log(1 + periodRate)
+            );
           remainingPeriods = Math.max(1, newRemainingPeriods) + 1;
         }
       }
